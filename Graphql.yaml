@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  A template to spin up an EC2 instance with Erlang and Elixir installed.
+  A template to spin up an EC2 instance ready for an Erlang/Elixir application.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -27,7 +27,7 @@ Metadata:
     - Label:
         default: SNS EMail
       Parameters:
-      - MyEmail
+      - SNSEmail
 
     - Label:
         default: FT Required Tags
@@ -39,6 +39,11 @@ Metadata:
       - TagDescription
       - TagName
       - TagStopSchedule
+
+    - Label:
+        default: Application Configuration
+      Parameters:
+      - AppName
 
     ParameterLabels:
       InstanceType:
@@ -55,6 +60,8 @@ Metadata:
         default: Require Public IP?
       Sudo:
         Default: The Sudo group to be added
+      AppName:
+        Default: The Erlang/Elixir application name as given in mix.exs, e.g. "graphql"
 
 Parameters:
   VPC:
@@ -76,7 +83,6 @@ Parameters:
     - sg-a5fd99c0
     - sg-9591fbf0
     - sg-4d20e329
-
 
   SecondarySecurityGroup:
     Description: The secondary security group used by ELB, database and instance.
@@ -170,7 +176,7 @@ Parameters:
 #    Type: AWS::EC2::KeyPair::KeyName
     Type: String
 
-  MyEmail:
+  SNSEmail:
     Description: SNS Email Subscription to send alerts to.
     Type: String
     ConstraintDescription: There must be a valid email address for the SNS Topic
@@ -196,8 +202,6 @@ Parameters:
     Default: FT-Linux-Role
     AllowedValues:
       - FT-Linux-Role
-      - FTPlatformGateway
-      - AnsibleProvisioner
 
   ImageId:
     Description: The AMI to be used, this MUST be an Amazon Linux image for the userdata to build correctly. A default is given.
@@ -224,7 +228,7 @@ Parameters:
   TagSystemCode:
     Description: Tag detail for the SystemCode
     Type: String
-    Default: membership-build
+    Default: memb-graphql-api
 
   TagIpCode:
     Description: Tag detail for the ipCode
@@ -234,18 +238,23 @@ Parameters:
   TagDescription:
     Description: Tag detail for the describing the instance.
     Type: String
-    Default: Erlang/Elixir Build Node
+    Default: Erlang/Elixir Execution Node
     AllowedPattern : ([a-zA-Z0-9].*)
 
   TagName:
     Description: Tag detail for the Name used in the console of the instance. NOT THE HOSTNAME OF THE INSTANCE.
     Type: String
-    Default: memb-build-1
+    Default: memb-grapql-1-eu-p
 
   TagStopSchedule:
     Description: Tag detail for the when the instance is to be powered off.
     Type: String
     Default: everyday
+
+  AppName:
+    Description: Elixir/Erlang application name as given in mix.exs (without atom prefix :)
+    Type: String
+    Default: graphql
 
 Conditions:
   HasKeyName:
@@ -303,35 +312,41 @@ Resources:
           #!/bin/bash
           /usr/bin/aws s3 cp s3://ft-ce-repository/amazon-ftbase/releases/bootstrap.sh .
           bash ./bootstrap.sh -s ${Sudo} -e ${TagEnvironment}
-          # Gist: https://gist.github.com/eikes/e2ce65e8f02e99d54010
           # Dev tools
           sudo yum -y install git
-          # Required for Erlang build
-          sudo yum -y groupinstall "Development Tools"
-          sudo yum -y install openssl-devel ncurses-devel
 
-          # Create build user, and install tools locally under that user:
-          sudo adduser build
-          sudo su - build
+          # Create user, and install tools locally under that user:
+          sudo adduser ${TagSystemCode}
+          sudo su - ${TagSystemCode}
 
-          # ASDF https://github.com/asdf-vm/asdf
-          git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.2.1
-          echo -e '\n. $HOME/.asdf/asdf.sh' >> ~/.bashrc
-          echo -e '\n. $HOME/.asdf/completions/asdf.bash' >> ~/.bashrc
-          . ~/.asdf/asdf.sh
+          sudo mkdir -p /var/log/apps/${TagSystemCode}
           
-          asdf plugin-add erlang https://github.com/asdf-vm/asdf-erlang.git
-          asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-          asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+          sudo chown ${TagSystemCode} /var/log/apps/${TagSystemCode}
+          sudo chmod 770 /var/log/apps/${TagSystemCode}
 
-          asdf install erlang 19.2
-          asdf global erlang 19.2
+          cat > /tmp/$$.logrotate <<__END__
+          /var/log/apps/${TagSystemCode}/*.log {
+              daily
+              rotate 5
+              maxsize 100M
+              compress
+              delaycompress
+              missingok
+              notifempty
+          }
+          __END__
 
-          asdf install elixir 1.4.1
-          asdf global elixir 1.4.1
+          sudo cp /tmp/$$.logrotate /etc/logrotate.d/${TagSystemCode}.logrotate
+          rm -f /tmp/$$.logrotate
 
-          asdf install nodejs 6.9.5
-          asdf global nodejs 6.9.5
+          # init script with low priority:
+          echo -e "# chkconfig: 2345 10 90" > /tmp/$$.init
+          echo -e "# description: Starts ${AppName} ${TagSystemCode}" >> /tmp/$$.init
+          echo -e '\nexec /home/membership-graphql-api/deployments/${TagSystemCode}/bin/${AppName} $*' >> /tmp/$$.init
+          
+          sudo cp /tmp/$$.init  /etc/init.d/${AppName}
+
+          sudo chkconfig --add ${AppName}
 
   InstanceCPUAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -356,7 +371,7 @@ Resources:
     Properties:
       Subscription:
       - Endpoint:
-          Ref: MyEmail
+          Ref: SNSEmail
         Protocol: email
 
 Outputs:
