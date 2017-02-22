@@ -61,59 +61,59 @@ Parameters:
     Description: This is the VPC the stack will be deployed inside.
     Type: AWS::EC2::VPC::Id
     Default: vpc-c9dfd5ab
-    AllowedValues:
-    - vpc-c9dfd5ab
-    - vpc-af0215cd
-    - vpc-f3534591
-    - vpc-6cbedf09
+    # AllowedValues:
+    # - vpc-c9dfd5ab
+    # - vpc-af0215cd
+    # - vpc-f3534591
+    # - vpc-6cbedf09
 
   PrimarySecurityGroup:
     Description: The primary security group used by ELB, database and instance.
     Type: AWS::EC2::SecurityGroup::Id
     Default: sg-4b1f7f2e
-    AllowedValues:
-    - sg-4b1f7f2e
-    - sg-a5fd99c0
-    - sg-9591fbf0
-    - sg-4d20e329
+    # AllowedValues:
+    # - sg-4b1f7f2e
+    # - sg-a5fd99c0
+    # - sg-9591fbf0
+    # - sg-4d20e329
 
 
   SecondarySecurityGroup:
     Description: The secondary security group used by ELB, database and instance.
     Type: AWS::EC2::SecurityGroup::Id
     Default: sg-7cfe9a19
-    AllowedValues:
-    - sg-54c0a631
-    - sg-7cfe9a19
-    - sg-1beb8b7e
-    - sg-f81bd89c
+    # AllowedValues:
+    # - sg-54c0a631
+    # - sg-7cfe9a19
+    # - sg-1beb8b7e
+    # - sg-f81bd89c
 
   AvailabilityZone:
     Description: Availability zone install the resources into.
     Type: AWS::EC2::AvailabilityZone::Name
     Default: eu-west-1b
-    AllowedValues:
-    - eu-west-1a
-    - eu-west-1b
-    - eu-west-1c
-    - us-east-1a
-    - us-east-1b
-    - us-east-1c
+    # AllowedValues:
+    # - eu-west-1a
+    # - eu-west-1b
+    # - eu-west-1c
+    # - us-east-1a
+    # - us-east-1b
+    # - us-east-1c
 
   InstanceSubnet:
     Description: The subnets to assign to the Instance; must match the AZ
     Type: AWS::EC2::Subnet::Id
     Default: subnet-ca6f3b8c
-    AllowedValues:
-    - subnet-33102047
-    - subnet-73ecbc35
-    - subnet-63690406
-    - subnet-bc5d68c8
-    - subnet-ca6f3b8c
-    - subnet-801e7de5
-    - subnet-c96755bd
-    - subnet-1eb0e258
-    - subnet-8c6805e9
+    # AllowedValues:
+    # - subnet-33102047
+    # - subnet-73ecbc35
+    # - subnet-63690406
+    # - subnet-bc5d68c8
+    # - subnet-ca6f3b8c
+    # - subnet-801e7de5
+    # - subnet-c96755bd
+    # - subnet-1eb0e258
+    # - subnet-8c6805e9
 
   InstanceType:
     Description: The type and size of the instance. Check documentation for recommended types.
@@ -312,7 +312,7 @@ Resources:
 
           # Create build user, and install tools locally under that user:
           sudo adduser build
-          sudo su - build
+          sudo sudo -u build bash
 
           # ASDF https://github.com/asdf-vm/asdf
           git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.2.1
@@ -329,6 +329,8 @@ Resources:
 
           asdf install elixir 1.4.1
           asdf global elixir 1.4.1
+          mix local.hex --force
+          mix local.rebar --force
 
           asdf install nodejs 6.9.5
           asdf global nodejs 6.9.5
