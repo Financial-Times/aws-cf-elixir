@@ -315,15 +315,16 @@ Resources:
           # Dev tools
           sudo yum -y install git
 
-          # Create user, and install tools locally under that user:
+          # Create user
           sudo adduser ${TagSystemCode}
           sudo su - ${TagSystemCode}
 
+          # create log directory
           sudo mkdir -p /var/log/apps/${TagSystemCode}
-          
           sudo chown ${TagSystemCode} /var/log/apps/${TagSystemCode}
           sudo chmod 770 /var/log/apps/${TagSystemCode}
 
+          # set up logrotate on log directory
           cat > /tmp/$$.logrotate <<__END__
           /var/log/apps/${TagSystemCode}/*.log {
               daily
@@ -339,17 +340,95 @@ Resources:
           sudo cp /tmp/$$.logrotate /etc/logrotate.d/${TagSystemCode}.logrotate
           rm -f /tmp/$$.logrotate
 
-          # where env vars for application will live
-          sudo touch /etc/sysconfig/${AppName}
+          # ~/.env: where env vars for application will live, imported into environment by app.sh
+          sudo touch /home/${TagSystemCode}/.env
+          sudo chown ${TagSystemCode}:${TagSystemCode} /home/${TagSystemCode}/.env
+          sudo chmod 600 /home/${TagSystemCode}/.env
 
-          # init script with low priority:
+
+          # ~/app.sh:  script that will run as user to set up the environment and start the VM
+          echo -e "#!/bin/bash" > /tmp/$$.app.sh
+          echo -e "APP=${AppName}" >> /tmp/$$.app.sh
+          
+          cat >>'__END__' >> /tmp/$$.app.sh
+          SAVE=$(set +o) && set -o allexport && . ~/.env; eval "$SAVE"
+          export LANG=en_GB.UTF-8
+          
+          ~/deployments/${APP}/bin/${APP} $*
+          __END__
+          
+          sudo cp /tmp/$$.app.sh /home/${TagSystemCode}/app.sh
+          sudo chown ${TagSystemCode}:${TagSystemCode} /home/${TagSystemCode}/app.sh
+          sudo chmod 754 /home/${TagSystemCode}/app.sh
+          rm -f /tmp/$$.app.sh
+
+
+          # install init.d script with low priority:
           echo -e "#!/bin/bash" > /tmp/$$.init
           echo -e "# chkconfig: 2345 10 90" > /tmp/$$.init
-          echo -e "# description: Starts ${AppName} ${TagSystemCode}" >> /tmp/$$.init
-          echo -e "SAVE=\$(set +o) && set -o allexport && . /etc/sysconfig/${AppName}; eval \"\$SAVE\"" >> /tmp/$$.init
-          echo -e "\nrunuser -u ${TagSystemCode} /home/${TagSystemCode}/deployments/${AppName}/bin/${AppName} \$*" >> /tmp/$$.init
+          echo -e "# description: Starts ${TagSystemCode} application" >> /tmp/$$.init
+          echo -e "SYSTEM_CODE"=${TagSystemCode}" >> /tmp/$$.init
           
+          cat > /tmp/$$.init <<'__END__'
+          APP="/home/${SYSTEM_CODE}/app.sh"
+
+          app_run() {
+            echo "$1 ${SYSTEM_CODE}..."
+            runuser -u ${SYSTEM_CODE} $APP $2
+            RETVAL=$?
+          }
+
+          app_start() {
+            app_run "Starting" start
+          }
+
+          app_stop() {
+            app_run "Stopping" stop
+          }
+
+          app_restart() {
+            app_run "Re-starting" reboot
+          }
+
+          # soft form of restart, without restarting VM
+          app_recycle() {
+            app_run "Soft re-starting" restart
+          }
+
+          app_status() {
+            app_run "Checking status of" ping
+          }
+
+
+          case "$1" in
+            start)
+              app_start
+              ;;
+            stop)
+              app_stop
+              ;;
+            restart)
+              app_restart
+              ;;
+            status)
+              app_status
+              ;;
+            recycle)
+              app_recycle
+              ;;
+            *)
+              echo "Usage: $0 {start|stop|restart|status|recycle}"
+              exit 1
+              ;;
+          esac
+
+          exit $RETVAL
+          __END__
+          
+
           sudo cp /tmp/$$.init  /etc/init.d/${AppName}
+          sudo chmod 754 /etc/init.d/${AppName}
+          rm -f /tmp/$$.init
 
           sudo chkconfig --add ${AppName}
 
