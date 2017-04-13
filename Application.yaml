@@ -347,7 +347,7 @@ Resources:
           echo -e "# chkconfig: 2345 10 90" > /tmp/$$.init
           echo -e "# description: Starts ${AppName} ${TagSystemCode}" >> /tmp/$$.init
           echo -e "SAVE=\$(set +o) && set -o allexport && . /etc/sysconfig/${AppName}; eval \"\$SAVE\"" >> /tmp/$$.init
-          echo -e '\nexec /home/membership-graphql-api/deployments/${TagSystemCode}/bin/${AppName} $*' >> /tmp/$$.init
+          echo -e "\nrunuser -u ${TagSystemCode} /home/${TagSystemCode}/deployments/${AppName}/bin/${AppName} \$*" >> /tmp/$$.init
           
           sudo cp /tmp/$$.init  /etc/init.d/${AppName}
 
